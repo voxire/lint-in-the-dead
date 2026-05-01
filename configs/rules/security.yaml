@@ -1,0 +1,98 @@
+version: "1"
+rules:
+  - id: SEC-001
+    name: Hardcoded password or secret
+    description: Detects assignment of sensitive values directly in source code.
+    category: security
+    severity: critical
+    languages: ["*"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?i)(password|passwd|secret|api_key|api_secret|auth_token|access_token)\s*=\s*[''"][^''"]{6,}[''"]'
+    message: Hardcoded secret detected. Use environment variables or a secrets manager.
+    fix: Replace with os.Getenv("SECRET_NAME") or equivalent.
+
+  - id: SEC-002
+    name: eval() usage
+    description: eval() executes arbitrary code and is a common injection vector.
+    category: security
+    severity: high
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\beval\s*\('
+    message: Avoid eval(). Use JSON.parse() or safer alternatives.
+
+  - id: SEC-003
+    name: exec.Command with variable args
+    description: Dynamic shell command construction can lead to command injection.
+    category: security
+    severity: high
+    languages: ["go"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'exec\.Command\([^"''`]'
+    message: exec.Command with non-literal arguments risks command injection. Validate all inputs.
+
+  - id: SEC-004
+    name: SQL query string concatenation
+    description: Building SQL by concatenation enables SQL injection.
+    category: security
+    severity: critical
+    languages: ["go", "python", "java", "javascript", "typescript", "php"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?i)(query|sql|stmt)\s*(\+?=|\+=)\s*.*(SELECT|INSERT|UPDATE|DELETE|DROP)'
+    message: SQL built via concatenation is vulnerable to injection. Use parameterised queries.
+
+  - id: SEC-005
+    name: Insecure random number generator
+    description: math/rand is not cryptographically secure.
+    category: security
+    severity: medium
+    languages: ["go"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\bmath/rand\b'
+    message: Use crypto/rand for security-sensitive random values.
+
+  - id: SEC-006
+    name: MD5 or SHA-1 usage
+    description: MD5 and SHA-1 are cryptographically broken.
+    category: security
+    severity: high
+    languages: ["go", "python", "java", "javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?i)(md5|sha1|sha-1)\b'
+    message: MD5/SHA-1 are broken. Use SHA-256 or SHA-3.
+
+  - id: SEC-007
+    name: Hardcoded IP address
+    description: Hardcoded IPs make configuration inflexible and can expose internal topology.
+    category: security
+    severity: low
+    languages: ["*"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\b(?!127\.0\.0\.1|0\.0\.0\.0|localhost)(\d{1,3}\.){3}\d{1,3}\b'
+    message: Avoid hardcoded IPs. Use service discovery or configuration.
+
+  - id: SEC-008
+    name: TODO/FIXME security note
+    description: Tracks security-related TODOs that must be resolved before release.
+    category: security
+    severity: info
+    languages: ["*"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?i)(TODO|FIXME|HACK|XXX).*(?:security|auth|crypto|secret|vuln|xss|inject)'
+    message: Security-related TODO found. Resolve before merging to main.

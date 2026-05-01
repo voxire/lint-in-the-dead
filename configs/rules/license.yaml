@@ -1,0 +1,26 @@
+version: "1"
+rules:
+  - id: LIC-001
+    name: GPL license in dependency
+    description: GPL code may impose copyleft requirements on the whole codebase.
+    category: license
+    severity: high
+    languages: ["*"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?i)\bGNU GENERAL PUBLIC LICENSE\b|\bGPLv[23]\b|\bGPL-[23]\b'
+    message: GPL-licensed code detected. Verify license compatibility with your project.
+
+  - id: LIC-002
+    name: Missing license header
+    description: Source files should carry a SPDX license identifier.
+    category: compliance
+    severity: medium
+    languages: ["go", "rust", "java", "typescript", "javascript"]
+    enabled: false
+    pattern:
+      type: regex
+      negate: true
+      match: '(?i)SPDX-License-Identifier'
+    message: File is missing an SPDX license identifier in its header.

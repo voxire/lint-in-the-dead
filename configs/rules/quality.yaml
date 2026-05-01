@@ -1,0 +1,97 @@
+version: "1"
+rules:
+  - id: QUAL-001
+    name: Print statement left in code
+    description: Debug print statements should not reach production.
+    category: quality
+    severity: low
+    languages: ["go", "python", "javascript", "typescript", "rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?:fmt\.Print(?:ln|f)?|console\.log|console\.warn|print\(|println!|dbg!)\s*\('
+    message: Debug print statement found. Remove before merging.
+
+  - id: QUAL-002
+    name: Panic call in production code
+    description: Unguarded panic() can crash the entire service.
+    category: quality
+    severity: high
+    languages: ["go"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\bpanic\s*\('
+    message: Replace panic() with graceful error handling and logging.
+
+  - id: QUAL-003
+    name: Ignored error return
+    description: Silently discarding errors hides failures.
+    category: quality
+    severity: medium
+    languages: ["go"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '^\s*_,?\s*=\s*.*(?:\.Write|\.Read|\.Close|\.Open|\.Connect|\.Exec|\.Do)\s*\('
+    message: Error return is discarded. Handle or explicitly wrap with _ and a comment.
+
+  - id: QUAL-004
+    name: Magic number
+    description: Bare numeric literals reduce readability and maintainability.
+    category: quality
+    severity: info
+    languages: ["go", "typescript", "javascript", "python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '(?<!=\s*)(?<!\w)\b(?!0|1|2|100|1000)\d{3,}\b(?!\s*[,\]])'
+    message: Consider extracting magic numbers into named constants.
+
+  - id: QUAL-005
+    name: Empty catch / error block
+    description: Swallowing errors silently makes debugging impossible.
+    category: quality
+    severity: medium
+    languages: ["javascript", "typescript", "java", "csharp"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'catch\s*\([^)]*\)\s*\{\s*\}'
+    message: Empty catch block swallows errors. At minimum, log them.
+
+  - id: QUAL-006
+    name: Long line
+    description: Lines over 120 characters reduce readability.
+    category: style
+    severity: info
+    languages: ["*"]
+    enabled: false
+    pattern:
+      type: regex
+      match: '^.{121,}$'
+    message: Line exceeds 120 characters.
+
+  - id: QUAL-007
+    name: Trailing whitespace
+    description: Trailing whitespace causes noisy diffs.
+    category: style
+    severity: info
+    languages: ["*"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '[ \t]+$'
+    message: Trailing whitespace detected.
+
+  - id: QUAL-008
+    name: Deep nesting (4+ levels)
+    description: Excessive nesting is a complexity indicator.
+    category: quality
+    severity: medium
+    languages: ["go", "javascript", "typescript", "java", "python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '^\s{16,}(?:if|for|while|switch|select)\b'
+    message: Code is deeply nested (4+ levels). Consider extracting into helper functions.
