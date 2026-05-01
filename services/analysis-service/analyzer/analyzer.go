@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/voxire/lint-in-the-dead/pkg/cache"
+	"github.com/voxire/lint-in-the-dead/pkg/deps"
 	"github.com/voxire/lint-in-the-dead/pkg/entropy"
 	"github.com/voxire/lint-in-the-dead/pkg/retry"
-
-	"github.com/voxire/lint-in-the-dead/pkg/cache"
 	gh "github.com/voxire/lint-in-the-dead/pkg/github"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/pkg/rules"
@@ -74,8 +74,9 @@ func (a *Analyzer) Run(ctx context.Context, job models.Job) (models.AnalysisResu
 		findings = nil
 	}
 
-	// Run entropy scanner in parallel with policy evaluation.
+	// Entropy scanner and dependency scanner run locally (no network hop).
 	findings = append(findings, entropyFindings(files)...)
+	findings = append(findings, depFindings(files)...)
 
 	summary := models.NewSummary(findings)
 	result := models.AnalysisResult{
@@ -247,6 +248,33 @@ func entropyFindings(files []rules.FileContent) []models.Finding {
 	for _, f := range files {
 		ef := entropy.Scan(f.Path, f.Content, entropy.DefaultThreshold)
 		out = append(out, entropy.ToModelFindings(ef)...)
+	}
+	return out
+}
+
+// depFindings parses dependency manifests and flags missing version pins.
+func depFindings(files []rules.FileContent) []models.Finding {
+	var out []models.Finding
+	for _, f := range files {
+		manifest, err := deps.ScanFile(f.Path, f.Content)
+		if err != nil || manifest == nil {
+			continue
+		}
+		for _, d := range manifest.Deps {
+			if d.Version == "" {
+				out = append(out, models.Finding{
+					RuleID:        "DEP-001",
+					RuleName:      "Unpinned dependency",
+					Category:      models.CategoryCompliance,
+					Severity:      models.SeverityMedium,
+					File:          f.Path,
+					Line:          1,
+					Column:        1,
+					Message:       "Dependency \"" + d.Name + "\" has no pinned version. Pin versions for reproducible builds.",
+					FixSuggestion: "Specify an exact version (e.g. ==1.2.3 or v1.2.3).",
+				})
+			}
+		}
 	}
 	return out
 }
