@@ -56,7 +56,7 @@ func (s *Server) GitHubWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleGitHubPR(w http.ResponseWriter, _ *http.Request, body []byte) {
+func (s *Server) handleGitHubPR(w http.ResponseWriter, r *http.Request, body []byte) {
 	var ev githubPREvent
 	if err := json.Unmarshal(body, &ev); err != nil {
 		http.Error(w, "decode payload", http.StatusBadRequest)
