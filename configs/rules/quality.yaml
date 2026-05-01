@@ -45,7 +45,7 @@ rules:
     enabled: true
     pattern:
       type: regex
-      match: '(?<!=\s*)(?<!\w)\b(?!0|1|2|100|1000)\d{3,}\b(?!\s*[,\]])'
+      match: '[^a-zA-Z0-9_"''`]\d{3,}[^a-zA-Z0-9_"''`]'
     message: Consider extracting magic numbers into named constants.
 
   - id: QUAL-005
