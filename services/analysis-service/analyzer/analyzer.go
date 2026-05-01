@@ -13,22 +13,29 @@ import (
 	"path/filepath"
 	"time"
 
+	gh "github.com/voxire/lint-in-the-dead/pkg/github"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/pkg/rules"
 )
 
 // Analyzer orchestrates cloning, file scanning, and policy evaluation.
 type Analyzer struct {
-	policyEngineURL      string
-	auditServiceURL      string
-	notificationURL      string
+	policyEngineURL string
+	auditServiceURL string
+	notificationURL string
+	ghClient        *gh.Client // nil when GITHUB_TOKEN is not set
 }
 
 func New(policyEngineURL, auditServiceURL, notificationURL string) *Analyzer {
+	var ghc *gh.Client
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		ghc = gh.NewClient(token)
+	}
 	return &Analyzer{
 		policyEngineURL: policyEngineURL,
 		auditServiceURL: auditServiceURL,
 		notificationURL: notificationURL,
+		ghClient:        ghc,
 	}
 }
 
@@ -67,8 +74,23 @@ func (a *Analyzer) Run(ctx context.Context, job models.Job) (models.AnalysisResu
 
 	go a.postAudit(context.Background(), job, result)
 	go a.postNotification(context.Background(), job, result)
+	if a.ghClient != nil && job.Source == models.JobSourceGitHub {
+		go a.postGitHubCheckRun(context.Background(), job, result)
+	}
 
 	return result, nil
+}
+
+func (a *Analyzer) postGitHubCheckRun(ctx context.Context, job models.Job, result models.AnalysisResult) {
+	if err := a.ghClient.PostCheckRun(ctx, job.RepoOwner, job.RepoName, result); err != nil {
+		log.Printf("github check-run post error for job %s: %v", job.ID, err)
+		return
+	}
+	if job.PRNumber > 0 {
+		if err := a.ghClient.PRComment(ctx, job.RepoOwner, job.RepoName, job.PRNumber, result); err != nil {
+			log.Printf("github pr comment error for job %s: %v", job.ID, err)
+		}
+	}
 }
 
 // cloneRepo does a shallow clone into a temp directory.
