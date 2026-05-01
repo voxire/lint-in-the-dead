@@ -1,0 +1,102 @@
+version: "3.9"
+
+x-go-env: &go-env
+  GO_ENV: production
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litd
+      POSTGRES_PASSWORD: litd
+      POSTGRES_DB: litd
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litd"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *go-env
+      LISTEN_ADDR: ":8080"
+      POLICY_ENGINE_URL: "http://policy-engine:8081"
+      ANALYSIS_SERVICE_URL: "http://analysis-service:8082"
+      AUDIT_SERVICE_URL: "http://audit-service:8083"
+      NOTIFICATION_SERVICE_URL: "http://notification-service:8084"
+      GITHUB_WEBHOOK_SECRET: "${GITHUB_WEBHOOK_SECRET}"
+    depends_on:
+      - policy-engine
+      - analysis-service
+
+  policy-engine:
+    build:
+      context: .
+      dockerfile: services/policy-engine/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      <<: *go-env
+      LISTEN_ADDR: ":8081"
+      RULES_DIR: "/etc/litd/rules"
+    volumes:
+      - ./configs/rules:/etc/litd/rules:ro
+
+  analysis-service:
+    build:
+      context: .
+      dockerfile: services/analysis-service/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      <<: *go-env
+      LISTEN_ADDR: ":8082"
+      WORKER_COUNT: "8"
+      POLICY_ENGINE_URL: "http://policy-engine:8081"
+      AUDIT_SERVICE_URL: "http://audit-service:8083"
+      NOTIFICATION_SERVICE_URL: "http://notification-service:8084"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  audit-service:
+    build:
+      context: .
+      dockerfile: services/audit-service/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      <<: *go-env
+      LISTEN_ADDR: ":8083"
+      DATABASE_URL: "postgres://litd:litd@postgres:5432/litd?sslmode=disable"
+      SIGNING_SECRET: "${AUDIT_SIGNING_SECRET:-changeme-32-byte-secret-key!!}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      <<: *go-env
+      LISTEN_ADDR: ":8084"
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
+      SMTP_FROM: "${SMTP_FROM:-litd@example.com}"
+
+volumes:
+  pg_data:

@@ -1,0 +1,10 @@
+go 1.24
+
+use (
+	./pkg
+	./services/analysis-service
+	./services/api-gateway
+	./services/audit-service
+	./services/notification-service
+	./services/policy-engine
+)
