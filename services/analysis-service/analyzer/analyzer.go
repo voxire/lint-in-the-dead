@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/voxire/lint-in-the-dead/pkg/retry"
+
 	"github.com/voxire/lint-in-the-dead/pkg/cache"
 	gh "github.com/voxire/lint-in-the-dead/pkg/github"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
@@ -165,17 +167,19 @@ type evaluateReq struct {
 	Files []rules.FileContent `json:"files"`
 }
 
-// evaluatePolicy sends files to the policy engine and collects findings.
+// evaluatePolicy sends files to the policy engine with retry on transient errors.
 func (a *Analyzer) evaluatePolicy(ctx context.Context, jobID string, files []rules.FileContent) ([]models.Finding, error) {
 	body, _ := json.Marshal(evaluateReq{JobID: jobID, Files: files})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		a.policyEngineURL+"/api/v1/evaluate", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := retry.DoHTTP(ctx, retry.Default, func() (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			a.policyEngineURL+"/api/v1/evaluate", bytes.NewReader(body))
+		if err != nil {
+			return nil, retry.Permanent(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return http.DefaultClient.Do(req)
+	})
 	if err != nil {
 		return nil, err
 	}

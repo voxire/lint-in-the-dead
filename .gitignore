@@ -1,11 +1,11 @@
 bin/
 dist/
-litd
-api-gateway
-policy-engine
-analysis-service
-audit-service
-notification-service
+/litd
+/api-gateway
+/policy-engine
+/analysis-service
+/audit-service
+/notification-service
 *.exe
 *.test
 *.out
