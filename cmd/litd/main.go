@@ -25,6 +25,8 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "check":
+		cmdCheck(os.Args[2:])
 	case "scan":
 		cmdScan(gateway, os.Args[2:])
 	case "jobs":
@@ -311,6 +313,8 @@ Environment:
   LITD_NOTIF_URL    Notif service URL  (default: http://localhost:8084)
 
 Examples:
+  litd check ./                                  # scan current directory
+  litd check --rules ./configs/rules --format gh # GitHub Actions annotations
   litd scan --repo https://github.com/org/repo --sha abc123 --wait
   litd jobs
   litd job <job-id>
