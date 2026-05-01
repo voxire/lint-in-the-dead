@@ -6,14 +6,16 @@ import (
 )
 
 type Config struct {
-	ListenAddr              string
-	PolicyEngineURL         string
-	AnalysisServiceURL      string
-	AuditServiceURL         string
-	NotificationServiceURL  string
-	GitHubWebhookSecret     string
-	WSReadBufferSize         int
-	WSWriteBufferSize        int
+	ListenAddr             string
+	PolicyEngineURL        string
+	AnalysisServiceURL     string
+	AuditServiceURL        string
+	NotificationServiceURL string
+	GitHubWebhookSecret    string
+	WSReadBufferSize       int
+	WSWriteBufferSize      int
+	RateLimitRPS           float64
+	RateLimitBurst         float64
 }
 
 func Load() Config {
@@ -26,6 +28,8 @@ func Load() Config {
 		GitHubWebhookSecret:    getEnv("GITHUB_WEBHOOK_SECRET", ""),
 		WSReadBufferSize:       getEnvInt("WS_READ_BUF", 1024),
 		WSWriteBufferSize:      getEnvInt("WS_WRITE_BUF", 1024),
+		RateLimitRPS:           getEnvFloat("RATE_LIMIT_RPS", 50),
+		RateLimitBurst:         getEnvFloat("RATE_LIMIT_BURST", 100),
 	}
 }
 
@@ -40,6 +44,15 @@ func getEnvInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func getEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return def

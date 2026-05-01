@@ -8,14 +8,16 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/voxire/lint-in-the-dead/services/api-gateway/config"
+	"github.com/voxire/lint-in-the-dead/services/api-gateway/middleware"
 )
 
-// Server wires together all handlers and the WebSocket hub.
+// Server wires together all handlers, middleware, and the WebSocket hub.
 type Server struct {
 	cfg      config.Config
 	hub      *Hub
 	upgrader websocket.Upgrader
 	mux      *http.ServeMux
+	handler  http.Handler
 }
 
 func New(cfg config.Config) *Server {
@@ -30,6 +32,15 @@ func New(cfg config.Config) *Server {
 		mux: http.NewServeMux(),
 	}
 	s.routes()
+
+	limiter := middleware.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
+	s.handler = middleware.Chain(
+		middleware.Recovery,
+		middleware.Logger,
+		middleware.CORS("*"),
+		limiter.Limit,
+	)(s.mux)
+
 	return s
 }
 
@@ -44,10 +55,9 @@ func (s *Server) routes() {
 func (s *Server) Start() error {
 	go s.hub.Run()
 	log.Printf("api-gateway listening on %s", s.cfg.ListenAddr)
-	return http.ListenAndServe(s.cfg.ListenAddr, s.mux)
+	return http.ListenAndServe(s.cfg.ListenAddr, s.handler)
 }
 
-// newID generates a random 16-byte hex ID.
 func newID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
