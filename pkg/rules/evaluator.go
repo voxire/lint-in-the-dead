@@ -71,14 +71,31 @@ func (e *Evaluator) evalRegex(r Rule, f FileContent) []models.Finding {
 		return nil
 	}
 
+	// Negate = file-level check: flag the whole file if the pattern is absent.
+	if r.Pattern.Negate {
+		if !re.MatchString(f.Content) {
+			return []models.Finding{{
+				RuleID:   r.ID,
+				RuleName: r.Name,
+				Category: models.FindingCategory(r.Category),
+				Severity: models.Severity(r.Severity),
+				File:     f.Path,
+				Line:     1,
+				Column:   1,
+				Message:  r.Message,
+				FixSuggestion: r.Fix,
+			}}
+		}
+		return nil
+	}
+
 	var findings []models.Finding
 	scanner := bufio.NewScanner(strings.NewReader(f.Content))
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-		matched := re.MatchString(line)
-		if matched && !r.Pattern.Negate || !matched && r.Pattern.Negate {
+		if re.MatchString(line) {
 			col := 1
 			if loc := re.FindStringIndex(line); loc != nil {
 				col = loc[0] + 1
