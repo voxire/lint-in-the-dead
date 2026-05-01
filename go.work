@@ -8,4 +8,5 @@ use (
 	./services/audit-service
 	./services/notification-service
 	./services/policy-engine
+	./tests/integration
 )
