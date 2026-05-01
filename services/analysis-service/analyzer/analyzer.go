@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/voxire/lint-in-the-dead/pkg/cache"
 	gh "github.com/voxire/lint-in-the-dead/pkg/github"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/pkg/rules"
@@ -24,6 +25,7 @@ type Analyzer struct {
 	auditServiceURL string
 	notificationURL string
 	ghClient        *gh.Client // nil when GITHUB_TOKEN is not set
+	resultCache     *cache.TTL[string, models.AnalysisResult]
 }
 
 func New(policyEngineURL, auditServiceURL, notificationURL string) *Analyzer {
@@ -36,11 +38,20 @@ func New(policyEngineURL, auditServiceURL, notificationURL string) *Analyzer {
 		auditServiceURL: auditServiceURL,
 		notificationURL: notificationURL,
 		ghClient:        ghc,
+		resultCache:     cache.New[string, models.AnalysisResult](2 * time.Hour),
 	}
 }
 
 // Run executes a full analysis for a job and returns the result.
+// Results are cached by commit SHA for 2 hours to avoid redundant clones.
 func (a *Analyzer) Run(ctx context.Context, job models.Job) (models.AnalysisResult, error) {
+	cacheKey := job.RepoOwner + "/" + job.RepoName + "@" + job.CommitSHA
+	if cached, ok := a.resultCache.Get(cacheKey); ok {
+		log.Printf("cache hit for %s", cacheKey)
+		cached.JobID = job.ID // return with current job ID
+		return cached, nil
+	}
+
 	start := time.Now()
 
 	dir, err := a.cloneRepo(ctx, job)
@@ -71,6 +82,8 @@ func (a *Analyzer) Run(ctx context.Context, job models.Job) (models.AnalysisResu
 		CompletedAt: time.Now().UTC(),
 		DurationMS:  time.Since(start).Milliseconds(),
 	}
+
+	a.resultCache.Set(cacheKey, result)
 
 	go a.postAudit(context.Background(), job, result)
 	go a.postNotification(context.Background(), job, result)
