@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/voxire/lint-in-the-dead/pkg/entropy"
 	"github.com/voxire/lint-in-the-dead/pkg/retry"
 
 	"github.com/voxire/lint-in-the-dead/pkg/cache"
@@ -72,6 +73,9 @@ func (a *Analyzer) Run(ctx context.Context, job models.Job) (models.AnalysisResu
 		log.Printf("policy eval error for job %s: %v", job.ID, err)
 		findings = nil
 	}
+
+	// Run entropy scanner in parallel with policy evaluation.
+	findings = append(findings, entropyFindings(files)...)
 
 	summary := models.NewSummary(findings)
 	result := models.AnalysisResult{
@@ -235,4 +239,14 @@ func (a *Analyzer) postNotification(ctx context.Context, job models.Job, result 
 		return
 	}
 	resp.Body.Close()
+}
+
+// entropyFindings runs Shannon entropy analysis across all collected files.
+func entropyFindings(files []rules.FileContent) []models.Finding {
+	var out []models.Finding
+	for _, f := range files {
+		ef := entropy.Scan(f.Path, f.Content, entropy.DefaultThreshold)
+		out = append(out, entropy.ToModelFindings(ef)...)
+	}
+	return out
 }
