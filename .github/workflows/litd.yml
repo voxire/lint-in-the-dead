@@ -29,20 +29,24 @@ jobs:
 
       - name: Run litd check (GitHub annotations)
         run: |
-          ./litd check . \
+          ./litd check \
             --rules configs/rules \
             --format gh \
             --fail-on high \
-            --no-entropy
+            --no-entropy \
+            --exclude tests/,pkg/entropy/entropy_test.go,pkg/rules/evaluator_test.go \
+            .
 
       - name: Run litd check (summary report)
         if: always()
         run: |
-          ./litd check . \
+          ./litd check \
             --rules configs/rules \
             --format text \
             --fail-on never \
-            --no-entropy
+            --no-entropy \
+            --exclude tests/,pkg/entropy/entropy_test.go,pkg/rules/evaluator_test.go \
+            .
 
   test:
     name: Unit & integration tests

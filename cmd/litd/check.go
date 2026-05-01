@@ -26,6 +26,8 @@ func cmdCheck(args []string) {
 	noEntropy := fs.Bool("no-entropy", false, "Disable entropy-based secret scanning")
 	noDeps    := fs.Bool("no-deps", false, "Disable dependency lockfile scanning")
 	failOn    := fs.String("fail-on", "high", `Minimum severity that causes non-zero exit: "critical" | "high" | "medium" | "low" | "never"`)
+	exclude   := fs.String("exclude", "", "Comma-separated path prefixes to skip (e.g. tests/,pkg/foo_test.go)")
+
 	fs.Parse(args)
 
 	dir := "."
@@ -51,6 +53,26 @@ func cmdCheck(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: walk %q: %v\n", dir, err)
 		os.Exit(2)
+	}
+
+	// ── 2b. Apply exclude prefixes ───────────────────────────────────────────
+	if *exclude != "" {
+		var kept []rules.FileContent
+		prefixes := strings.Split(*exclude, ",")
+		for _, f := range files {
+			skip := false
+			for _, p := range prefixes {
+				p = strings.TrimSpace(p)
+				if p != "" && strings.HasPrefix(f.Path, p) {
+					skip = true
+					break
+				}
+			}
+			if !skip {
+				kept = append(kept, f)
+			}
+		}
+		files = kept
 	}
 
 	// ── 3. Run analysers ─────────────────────────────────────────────────────
