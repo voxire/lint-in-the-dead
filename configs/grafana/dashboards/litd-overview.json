@@ -1,0 +1,96 @@
+{
+  "title": "lint-in-the-dead Overview",
+  "uid": "litd-overview",
+  "schemaVersion": 38,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Jobs Queued (total)",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [{ "expr": "analysis_service_jobs_queued_total", "legendFormat": "queued" }],
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Jobs Completed (total)",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [{ "expr": "analysis_service_jobs_completed_total", "legendFormat": "completed" }],
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Jobs Failed (total)",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "targets": [{ "expr": "analysis_service_jobs_failed_total", "legendFormat": "failed" }],
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Queue Depth",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "targets": [{ "expr": "analysis_service_queue_depth", "legendFormat": "depth" }],
+      "options": { "colorMode": "background", "thresholds": { "steps": [{"color":"green","value":0},{"color":"yellow","value":5},{"color":"red","value":20}] } }
+    },
+    {
+      "id": 5, "type": "stat", "title": "Workers",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "targets": [{ "expr": "analysis_service_worker_count", "legendFormat": "workers" }],
+      "options": { "colorMode": "value" }
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "API Gateway — Requests/s",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "rate(api_gateway_http_requests_total[1m])", "legendFormat": "req/s" },
+        { "expr": "rate(api_gateway_http_errors_total[1m])", "legendFormat": "errors/s" }
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "API Gateway — P99 Latency (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(api_gateway_http_request_duration_ms_bucket[5m]))", "legendFormat": "p99" },
+        { "expr": "histogram_quantile(0.50, rate(api_gateway_http_request_duration_ms_bucket[5m]))", "legendFormat": "p50" }
+      ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Policy Engine — Evaluations/s",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "rate(policy_engine_evaluations_total[1m])", "legendFormat": "eval/s" }
+      ]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Policy Engine — Evaluation Latency (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(policy_engine_evaluation_duration_ms_bucket[5m]))", "legendFormat": "p99" },
+        { "expr": "histogram_quantile(0.50, rate(policy_engine_evaluation_duration_ms_bucket[5m]))", "legendFormat": "p50" }
+      ]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Audit Entries Inserted/s",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [{ "expr": "rate(audit_service_entries_inserted_total[1m])", "legendFormat": "inserts/s" }]
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Service Goroutines",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        { "expr": "api_gateway_goroutines",       "legendFormat": "api-gateway" },
+        { "expr": "policy_engine_goroutines",     "legendFormat": "policy-engine" },
+        { "expr": "analysis_service_goroutines",  "legendFormat": "analysis-service" },
+        { "expr": "audit_service_goroutines",     "legendFormat": "audit-service" },
+        { "expr": "notification_service_goroutines", "legendFormat": "notification-service" }
+      ]
+    },
+    {
+      "id": 12, "type": "timeseries", "title": "Heap Allocated (bytes)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+      "targets": [
+        { "expr": "api_gateway_heap_alloc_bytes",       "legendFormat": "api-gateway" },
+        { "expr": "policy_engine_heap_alloc_bytes",     "legendFormat": "policy-engine" },
+        { "expr": "analysis_service_heap_alloc_bytes",  "legendFormat": "analysis-service" },
+        { "expr": "audit_service_heap_alloc_bytes",     "legendFormat": "audit-service" }
+      ]
+    }
+  ]
+}
