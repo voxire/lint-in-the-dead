@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/voxire/lint-in-the-dead/pkg/metrics"
 	"github.com/voxire/lint-in-the-dead/services/api-gateway/config"
 	"github.com/voxire/lint-in-the-dead/services/api-gateway/middleware"
 )
@@ -18,9 +19,12 @@ type Server struct {
 	upgrader websocket.Upgrader
 	mux      *http.ServeMux
 	handler  http.Handler
+	reg      *metrics.Registry
 }
 
 func New(cfg config.Config) *Server {
+	reg := metrics.NewRegistry("api_gateway")
+
 	s := &Server{
 		cfg: cfg,
 		hub: NewHub(),
@@ -30,6 +34,7 @@ func New(cfg config.Config) *Server {
 			CheckOrigin:     func(*http.Request) bool { return true },
 		},
 		mux: http.NewServeMux(),
+		reg: reg,
 	}
 	s.routes()
 
@@ -39,6 +44,7 @@ func New(cfg config.Config) *Server {
 		middleware.Logger,
 		middleware.CORS("*"),
 		limiter.Limit,
+		middleware.Metrics(reg),
 	)(s.mux)
 
 	return s
@@ -46,6 +52,7 @@ func New(cfg config.Config) *Server {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", HealthHandler)
+	s.mux.HandleFunc("GET /metrics", s.reg.Handler())
 	s.mux.HandleFunc("POST /api/v1/jobs", s.SubmitJobHandler)
 	s.mux.HandleFunc("GET /api/v1/jobs", s.ListJobsHandler)
 	s.mux.HandleFunc("POST /webhooks/github", s.GitHubWebhookHandler)

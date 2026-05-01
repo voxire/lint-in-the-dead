@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/voxire/lint-in-the-dead/pkg/metrics"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/pkg/queue"
 	"github.com/voxire/lint-in-the-dead/services/analysis-service/analyzer"
@@ -26,6 +27,13 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	reg := metrics.NewRegistry("analysis_service")
+	jobsQueued    := reg.Counter("jobs_queued_total")
+	jobsCompleted := reg.Counter("jobs_completed_total")
+	jobsFailed    := reg.Counter("jobs_failed_total")
+	queueDepth    := reg.Gauge("queue_depth")
+	reg.Gauge("worker_count").Set(int64(workerCount))
 
 	q := queue.NewInMemory(512)
 	a := analyzer.New(policyURL, auditURL, notifURL)
@@ -44,10 +52,16 @@ func main() {
 			if err != nil {
 				return
 			}
+			queueDepth.Dec()
 			resultCh := make(chan models.AnalysisResult, 1)
 			pool.Submit(analyzer.WorkItem{Job: job, ResultCh: resultCh})
 			go func(id string) {
 				r := <-resultCh
+				if r.Summary.TotalFindings >= 0 {
+					jobsCompleted.Inc()
+				} else {
+					jobsFailed.Inc()
+				}
 				mu.Lock()
 				results[id] = r
 				mu.Unlock()
@@ -57,6 +71,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("GET /metrics", reg.Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "ok",
@@ -79,6 +94,8 @@ func main() {
 			http.Error(w, "queue full", http.StatusServiceUnavailable)
 			return
 		}
+		jobsQueued.Inc()
+		queueDepth.Inc()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(job)

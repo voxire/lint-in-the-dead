@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/voxire/lint-in-the-dead/pkg/metrics"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/services/notification-service/notifier"
 )
@@ -23,8 +24,14 @@ func main() {
 	)
 	dispatcher := notifier.NewDispatcher(slack, email)
 
+	reg := metrics.NewRegistry("notification_service")
+	notifSent   := reg.Counter("notifications_sent_total")
+	notifFailed := reg.Counter("notifications_failed_total")
+	_ = notifFailed // incremented inside dispatcher in future iteration
+
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("GET /metrics", reg.Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":        "ok",
@@ -40,6 +47,7 @@ func main() {
 			return
 		}
 		go dispatcher.Dispatch(r.Context(), req)
+		notifSent.Inc()
 		w.WriteHeader(http.StatusAccepted)
 	})
 

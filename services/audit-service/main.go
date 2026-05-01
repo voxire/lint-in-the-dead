@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/voxire/lint-in-the-dead/pkg/metrics"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/services/audit-service/store"
 )
@@ -32,8 +33,14 @@ func main() {
 		log.Println("audit-service: using in-memory store (set DATABASE_URL for persistence)")
 	}
 
+	reg := metrics.NewRegistry("audit_service")
+	entriesInserted := reg.Counter("entries_inserted_total")
+	entriesVerified := reg.Counter("entries_verified_total")
+	verifyFailed    := reg.Counter("entries_verify_failed_total")
+
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("GET /metrics", reg.Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
@@ -62,6 +69,7 @@ func main() {
 			http.Error(w, "store error", http.StatusInternalServerError)
 			return
 		}
+		entriesInserted.Inc()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(entry)
@@ -95,6 +103,10 @@ func main() {
 		if err != nil {
 			http.Error(w, "verify error", http.StatusInternalServerError)
 			return
+		}
+		entriesVerified.Inc()
+		if !ok {
+			verifyFailed.Inc()
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "valid": ok})
