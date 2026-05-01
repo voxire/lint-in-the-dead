@@ -16,6 +16,7 @@ import (
 type Server struct {
 	cfg      config.Config
 	hub      *Hub
+	sse      *SSEBroker
 	upgrader websocket.Upgrader
 	mux      *http.ServeMux
 	handler  http.Handler
@@ -28,6 +29,7 @@ func New(cfg config.Config) *Server {
 	s := &Server{
 		cfg: cfg,
 		hub: NewHub(),
+		sse: NewSSEBroker(),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  cfg.WSReadBufferSize,
 			WriteBufferSize: cfg.WSWriteBufferSize,
@@ -55,6 +57,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /metrics", s.reg.Handler())
 	s.mux.HandleFunc("POST /api/v1/jobs", s.SubmitJobHandler)
 	s.mux.HandleFunc("GET /api/v1/jobs", s.ListJobsHandler)
+	s.mux.HandleFunc("GET /api/v1/jobs/{id}/stream", s.sse.ServeSSE)
 	s.mux.HandleFunc("POST /webhooks/github", s.GitHubWebhookHandler)
 	s.mux.HandleFunc("GET /ws", ServeWS(s.hub, s.upgrader))
 }
