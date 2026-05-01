@@ -1,0 +1,78 @@
+name: litd self-check
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Code quality & compliance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: go.work.sum
+
+      - name: Build litd
+        run: go build -o litd ./cmd/litd/
+
+      - name: Run litd check (GitHub annotations)
+        run: |
+          ./litd check . \
+            --rules configs/rules \
+            --format gh \
+            --fail-on high \
+            --no-entropy
+
+      - name: Run litd check (summary report)
+        if: always()
+        run: |
+          ./litd check . \
+            --rules configs/rules \
+            --format text \
+            --fail-on never \
+            --no-entropy
+
+  test:
+    name: Unit & integration tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: go.work.sum
+
+      - name: Test pkg
+        run: go test ./... -count=1
+        working-directory: pkg
+
+      - name: Test integration
+        run: go test ./... -count=1 -v
+        working-directory: tests/integration
+
+      - name: Test cmd/litd
+        run: go build ./...
+        working-directory: cmd/litd
+
+      - name: Test services
+        run: |
+          for svc in services/*/; do
+            echo "=== building $svc ==="
+            (cd "$svc" && go build ./...)
+          done
