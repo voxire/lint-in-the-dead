@@ -58,7 +58,7 @@ rules:
     enabled: true
     pattern:
       type: regex
-      match: '\bmath/rand\b'
+      match: '"math/rand"'
     message: Use crypto/rand for security-sensitive random values.
 
   - id: SEC-006

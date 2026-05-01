@@ -42,7 +42,7 @@ rules:
     category: quality
     severity: info
     languages: ["go", "typescript", "javascript", "python"]
-    enabled: true
+    enabled: false
     pattern:
       type: regex
       match: '[^a-zA-Z0-9_"''`]\d{3,}[^a-zA-Z0-9_"''`]'

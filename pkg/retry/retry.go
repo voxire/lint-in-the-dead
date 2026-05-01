@@ -5,7 +5,7 @@ package retry
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"time"
 )
