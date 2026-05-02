@@ -220,3 +220,7 @@ Go 1.24 workspace (`go.work`) ties all modules together — no need to `replace`
 ## License
 
 MIT
+
+---
+
+Built by [Voxire](https://voxire.com) — digital agency in Beirut, Lebanon.
