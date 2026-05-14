@@ -28,25 +28,15 @@ jobs:
         run: go build -o litd ./cmd/litd/
 
       - name: Run litd check (GitHub annotations)
-        run: |
-          ./litd check \
-            --rules configs/rules \
-            --format gh \
-            --fail-on high \
-            --no-entropy \
-            --exclude tests/,pkg/entropy/entropy_test.go,pkg/rules/evaluator_test.go \
-            .
+        run: ./litd check --format gh .
 
       - name: Run litd check (summary report)
         if: always()
-        run: |
-          ./litd check \
-            --rules configs/rules \
-            --format text \
-            --fail-on never \
-            --no-entropy \
-            --exclude tests/,pkg/entropy/entropy_test.go,pkg/rules/evaluator_test.go \
-            .
+        run: ./litd check --format text --fail-on never .
+
+      - name: Validate rules have passing tests
+        if: always()
+        run: ./litd test-rules
 
   test:
     name: Unit & integration tests

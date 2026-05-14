@@ -27,6 +27,8 @@ func main() {
 	switch os.Args[1] {
 	case "check":
 		cmdCheck(os.Args[2:])
+	case "test-rules":
+		cmdTestRules(os.Args[2:])
 	case "scan":
 		cmdScan(gateway, os.Args[2:])
 	case "jobs":
@@ -297,13 +299,15 @@ Usage:
   litd <command> [flags]
 
 Commands:
-  scan    Submit a repository for analysis
-  jobs    List all completed analysis results
-  job     Show detailed result for a single job ID
-  audit   Query the immutable audit log
-  rules   List all loaded policy rules
-  health  Check health of all services
-  version Print version
+  check       Run full analysis in-process (no services required)
+  test-rules  Validate YAML rules against their inline pass/fail fixtures
+  scan        Submit a repository for analysis
+  jobs        List all completed analysis results
+  job         Show detailed result for a single job ID
+  audit       Query the immutable audit log
+  rules       List all loaded policy rules
+  health      Check health of all services
+  version     Print version
 
 Environment:
   LITD_GATEWAY      API gateway URL    (default: http://localhost:8080)

@@ -12,6 +12,10 @@ rules:
       match: '(?i)(password|passwd|secret|api_key|api_secret|auth_token|access_token)\s*=\s*[''"][^''"]{6,}[''"]'
     message: Hardcoded secret detected. Use environment variables or a secrets manager.
     fix: Replace with os.Getenv("SECRET_NAME") or equivalent.
+    tests:
+      pass:
+        - 'secret := os.Getenv("APP_SECRET")'
+        - 'apiKey = config.Get("api_key")'
 
   - id: SEC-002
     name: eval() usage
@@ -24,6 +28,12 @@ rules:
       type: regex
       match: '\beval\s*\('
     message: Avoid eval(). Use JSON.parse() or safer alternatives.
+    tests:
+      pass:
+        - 'const data = JSON.parse(input)'
+      fail:
+        - 'eval(userInput)'
+        - 'eval("alert(1)")'
 
   - id: SEC-003
     name: exec.Command with variable args

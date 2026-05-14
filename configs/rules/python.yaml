@@ -1,0 +1,98 @@
+version: "1"
+rules:
+  - id: PY-001
+    name: pickle deserialization
+    description: Unpickling untrusted data allows arbitrary code execution.
+    category: security
+    severity: critical
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'pickle\.loads?\s*\('
+    message: "pickle.load/loads on untrusted data is an RCE vector. Use json or a safe serialiser."
+
+  - id: PY-002
+    name: subprocess shell=True
+    description: shell=True passes the command through the shell, enabling injection.
+    category: security
+    severity: high
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'subprocess\.(call|run|Popen|check_output)\s*\(.*shell\s*=\s*True'
+    message: "shell=True enables shell injection. Pass a list of arguments instead."
+    fix: "Use subprocess.run(['cmd', arg1, arg2]) without shell=True."
+
+  - id: PY-003
+    name: os.system usage
+    description: os.system passes the string to the shell verbatim.
+    category: security
+    severity: high
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'os\.system\s*\('
+    message: "os.system() is a shell injection risk. Use subprocess.run() with a list."
+
+  - id: PY-004
+    name: Weak hash — hashlib MD5/SHA1
+    description: MD5 and SHA-1 are cryptographically broken.
+    category: security
+    severity: high
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'hashlib\.(md5|sha1)\s*\('
+    message: "MD5/SHA-1 are broken. Use hashlib.sha256() or hashlib.sha3_256()."
+
+  - id: PY-005
+    name: assert used for security checks
+    description: Python strips assert statements when run with -O; never use them for security enforcement.
+    category: security
+    severity: medium
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'assert\s+.*(auth|permission|role|admin|token|secret)'
+    message: "assert can be disabled with -O. Use an explicit if/raise for security checks."
+
+  - id: PY-006
+    name: hardcoded /tmp path
+    description: Using /tmp directly is susceptible to symlink attacks.
+    category: security
+    severity: low
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '[''"]/tmp/'
+    message: "Use tempfile.mkdtemp() or tempfile.NamedTemporaryFile() instead of /tmp directly."
+
+  - id: PY-007
+    name: print() debug statement
+    description: Debug prints left in production code clutter logs.
+    category: quality
+    severity: low
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '^\s*print\s*\('
+    message: "Remove print() debug statements before merging. Use the logging module."
+
+  - id: PY-008
+    name: bare except clause
+    description: Catching all exceptions including SystemExit and KeyboardInterrupt.
+    category: quality
+    severity: medium
+    languages: ["python"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '^\s*except\s*:'
+    message: "Bare except: catches SystemExit and KeyboardInterrupt. Use except Exception: or be specific."

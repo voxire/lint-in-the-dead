@@ -1,0 +1,74 @@
+version: "1"
+rules:
+  - id: RS-001
+    name: unsafe block
+    description: unsafe bypasses Rust's memory-safety guarantees.
+    category: security
+    severity: medium
+    languages: ["rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\bunsafe\s*\{'
+    message: "unsafe block detected. Document the invariant that makes it sound."
+
+  - id: RS-002
+    name: unwrap() on Result/Option
+    description: unwrap() panics on Err/None — use ? or proper error handling.
+    category: quality
+    severity: medium
+    languages: ["rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\.unwrap\(\)'
+    message: "unwrap() panics on failure. Use ?, unwrap_or(), or handle the error explicitly."
+    fix: "Replace .unwrap() with ? in functions that return Result, or .unwrap_or(default)."
+
+  - id: RS-003
+    name: expect() on Result/Option
+    description: expect() panics with a message but still terminates the process.
+    category: quality
+    severity: low
+    languages: ["rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\.expect\s*\('
+    message: "expect() panics on failure. Prefer ? or explicit match in production paths."
+
+  - id: RS-004
+    name: panic! macro
+    description: Explicit panic terminates the thread/process.
+    category: quality
+    severity: medium
+    languages: ["rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\bpanic!\s*\('
+    message: "panic! terminates the process. Return a Result instead."
+
+  - id: RS-005
+    name: todo!/unimplemented! macro
+    description: Placeholder macros that panic at runtime.
+    category: quality
+    severity: info
+    languages: ["rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\b(todo|unimplemented)!\s*\('
+    message: "todo!/unimplemented! will panic at runtime. Replace before shipping."
+
+  - id: RS-006
+    name: transmute usage
+    description: mem::transmute reinterprets memory and can cause UB if types differ in layout.
+    category: security
+    severity: high
+    languages: ["rust"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '::transmute\s*[:<(]'
+    message: "transmute reinterprets raw memory. Use safe conversion traits (From/Into/TryFrom)."

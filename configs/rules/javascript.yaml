@@ -1,0 +1,104 @@
+version: "1"
+rules:
+  - id: JS-001
+    name: innerHTML assignment
+    description: Setting innerHTML with untrusted data causes XSS.
+    category: security
+    severity: high
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '\.innerHTML\s*='
+    message: "innerHTML assignment can cause XSS. Use textContent or a sanitiser."
+    fix: "Use element.textContent = value or DOMPurify.sanitize(value)."
+    tests:
+      pass:
+        - 'element.textContent = userInput'
+      fail:
+        - 'div.innerHTML = userInput'
+        - 'el.innerHTML = "<b>" + name + "</b>"'
+
+  - id: JS-002
+    name: document.write usage
+    description: document.write is a classic XSS vector and blocks the parser.
+    category: security
+    severity: high
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'document\.write\s*\('
+    message: "Avoid document.write(). Manipulate the DOM directly instead."
+
+  - id: JS-003
+    name: dangerouslySetInnerHTML
+    description: React prop that bypasses XSS protection.
+    category: security
+    severity: high
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'dangerouslySetInnerHTML'
+    message: "dangerouslySetInnerHTML bypasses React's XSS protection. Sanitise input with DOMPurify."
+
+  - id: JS-004
+    name: Sensitive data in localStorage
+    description: Tokens and secrets stored in localStorage are accessible to any JS on the page.
+    category: security
+    severity: medium
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'localStorage\.setItem\s*\([^,]+,.*(?i)(token|password|secret|key)'
+    message: "Do not store secrets in localStorage. Use httpOnly cookies or secure server-side sessions."
+
+  - id: JS-005
+    name: Prototype pollution risk
+    description: Merging objects recursively without checking keys can pollute Object.prototype.
+    category: security
+    severity: medium
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '__proto__|constructor\s*\[|prototype\s*\['
+    message: "Possible prototype pollution. Validate keys before merging user-supplied objects."
+
+  - id: JS-006
+    name: console.log left in code
+    description: Debug logging exposes internals and clutters production output.
+    category: quality
+    severity: low
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'console\.(log|debug)\s*\('
+    message: "Remove console.log/debug before merging."
+
+  - id: JS-007
+    name: == instead of ===
+    description: Loose equality has surprising coercion behaviour.
+    category: quality
+    severity: info
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: '[^=!<>]==[^=]'
+    message: "Use === instead of == to avoid type coercion surprises."
+
+  - id: JS-008
+    name: setTimeout/setInterval with string argument
+    description: Passing a string to setTimeout is equivalent to eval().
+    category: security
+    severity: high
+    languages: ["javascript", "typescript"]
+    enabled: true
+    pattern:
+      type: regex
+      match: 'set(Timeout|Interval)\s*\(\s*["''`]'
+    message: "Passing a string to setTimeout/setInterval is eval(). Pass a function instead."

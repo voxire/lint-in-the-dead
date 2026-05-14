@@ -1,0 +1,8 @@
+rules_dir: configs/rules
+fail_on: high
+no_entropy: true
+exclude:
+  - tests/
+  - configs/rules/
+  - pkg/entropy/entropy_test.go
+  - pkg/rules/evaluator_test.go
