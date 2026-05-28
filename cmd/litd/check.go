@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -15,19 +16,42 @@ import (
 	"github.com/voxire/lint-in-the-dead/pkg/entropy"
 	"github.com/voxire/lint-in-the-dead/pkg/models"
 	"github.com/voxire/lint-in-the-dead/pkg/rules"
+	"gopkg.in/yaml.v3"
 )
+
+// litdConfig is the schema for .litd.yaml project configuration.
+// CLI flags always override values set here.
+type litdConfig struct {
+	RulesDir         string   `yaml:"rules_dir"`
+	Format           string   `yaml:"format"`
+	FailOn           string   `yaml:"fail_on"`
+	EntropyThreshold float64  `yaml:"entropy_threshold"`
+	NoEntropy        bool     `yaml:"no_entropy"`
+	NoDeps           bool     `yaml:"no_deps"`
+	Exclude          []string `yaml:"exclude"`
+}
+
+func loadProjectConfig(dir string) litdConfig {
+	data, err := os.ReadFile(filepath.Join(dir, ".litd.yaml"))
+	if err != nil {
+		return litdConfig{}
+	}
+	var cfg litdConfig
+	yaml.Unmarshal(data, &cfg) //nolint:errcheck
+	return cfg
+}
 
 func cmdCheck(args []string) {
 	fs := flag.NewFlagSet("check", flag.ExitOnError)
-	rulesDir  := fs.String("rules", defaultRulesDir(), "Directory containing YAML rule files")
-	format    := fs.String("format", "text", `Output format: "text" | "gh" (GitHub Actions annotations) | "json"`)
-	threshold := fs.Float64("entropy-threshold", entropy.DefaultThreshold, "Shannon entropy threshold for secret detection")
-	maxFinds  := fs.Int("max-findings", 0, "Limit output to N findings (0 = all)")
+	rulesDir := fs.String("rules", "", "Directory containing YAML rule files (default: configs/rules or .litd.yaml)")
+	format := fs.String("format", "", `Output format: "text" | "gh" | "json" | "sarif"`)
+	threshold := fs.Float64("entropy-threshold", 0, "Shannon entropy threshold (0 = use config or default 4.5)")
+	maxFinds := fs.Int("max-findings", 0, "Limit output to N findings (0 = all)")
 	noEntropy := fs.Bool("no-entropy", false, "Disable entropy-based secret scanning")
-	noDeps    := fs.Bool("no-deps", false, "Disable dependency lockfile scanning")
-	failOn    := fs.String("fail-on", "high", `Minimum severity that causes non-zero exit: "critical" | "high" | "medium" | "low" | "never"`)
-	exclude   := fs.String("exclude", "", "Comma-separated path prefixes to skip (e.g. tests/,pkg/foo_test.go)")
-
+	noDeps := fs.Bool("no-deps", false, "Disable dependency lockfile scanning")
+	failOn := fs.String("fail-on", "", `Minimum severity for non-zero exit: "critical"|"high"|"medium"|"low"|"never"`)
+	exclude := fs.String("exclude", "", "Comma-separated path prefixes to skip")
+	changed := fs.Bool("changed", false, "Only scan files changed since last commit (requires git)")
 	fs.Parse(args)
 
 	dir := "."
@@ -35,10 +59,53 @@ func cmdCheck(args []string) {
 		dir = fs.Arg(0)
 	}
 
-	// ── 1. Load rules ───────────────────────────────────────────────────────
+	// ── 0. Merge .litd.yaml config (CLI flags win) ───────────────────────────
+	cfg := loadProjectConfig(dir)
+	if *rulesDir == "" {
+		if cfg.RulesDir != "" {
+			*rulesDir = cfg.RulesDir
+		} else {
+			*rulesDir = defaultRulesDir()
+		}
+	}
+	if *format == "" {
+		if cfg.Format != "" {
+			*format = cfg.Format
+		} else {
+			*format = "text"
+		}
+	}
+	if *failOn == "" {
+		if cfg.FailOn != "" {
+			*failOn = cfg.FailOn
+		} else {
+			*failOn = "high"
+		}
+	}
+	if *threshold == 0 {
+		if cfg.EntropyThreshold != 0 {
+			*threshold = cfg.EntropyThreshold
+		} else {
+			*threshold = entropy.DefaultThreshold
+		}
+	}
+	if cfg.NoEntropy {
+		*noEntropy = true
+	}
+	if cfg.NoDeps {
+		*noDeps = true
+	}
+	// Merge exclude lists
+	excludePrefixes := cfg.Exclude
+	if *exclude != "" {
+		for _, p := range strings.Split(*exclude, ",") {
+			excludePrefixes = append(excludePrefixes, strings.TrimSpace(p))
+		}
+	}
+
+	// ── 1. Load rules ────────────────────────────────────────────────────────
 	loaded, err := rules.LoadDir(*rulesDir)
 	if err != nil {
-		// Non-fatal: warn and continue with zero rules (entropy + deps still run).
 		fmt.Fprintf(os.Stderr, "warn: could not load rules from %q: %v\n", *rulesDir, err)
 		loaded = nil
 	}
@@ -48,21 +115,24 @@ func cmdCheck(args []string) {
 		os.Exit(2)
 	}
 
-	// ── 2. Walk files ────────────────────────────────────────────────────────
-	files, err := walkFiles(dir)
+	// ── 2. Collect files ─────────────────────────────────────────────────────
+	var files []rules.FileContent
+	if *changed {
+		files, err = changedFiles(dir)
+	} else {
+		files, err = walkFiles(dir)
+	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: walk %q: %v\n", dir, err)
+		fmt.Fprintf(os.Stderr, "error: collect files: %v\n", err)
 		os.Exit(2)
 	}
 
-	// ── 2b. Apply exclude prefixes ───────────────────────────────────────────
-	if *exclude != "" {
+	// Apply exclude prefixes
+	if len(excludePrefixes) > 0 {
 		var kept []rules.FileContent
-		prefixes := strings.Split(*exclude, ",")
 		for _, f := range files {
 			skip := false
-			for _, p := range prefixes {
-				p = strings.TrimSpace(p)
+			for _, p := range excludePrefixes {
 				if p != "" && strings.HasPrefix(f.Path, p) {
 					skip = true
 					break
@@ -124,6 +194,8 @@ func cmdCheck(args []string) {
 		printGHAnnotations(findings)
 	case "json":
 		printJSON(models.AnalysisResult{Findings: findings, Summary: summary})
+	case "sarif":
+		printSARIF(findings, loaded)
 	default:
 		printTextReport(findings, summary, dir)
 	}
@@ -149,13 +221,110 @@ func printGHAnnotations(findings []models.Finding) {
 }
 
 func printJSON(result models.AnalysisResult) {
-	printJSON_inner(result)
-}
-
-func printJSON_inner(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(v) //nolint:errcheck
+	enc.Encode(result) //nolint:errcheck
+}
+
+// printSARIF emits SARIF 2.1.0 — consumable by GitHub Advanced Security
+// (upload-sarif action) and any SARIF-aware viewer.
+func printSARIF(findings []models.Finding, loaded []rules.Rule) {
+	type sarifMessage struct {
+		Text string `json:"text"`
+	}
+	type sarifLocation struct {
+		PhysicalLocation struct {
+			ArtifactLocation struct {
+				URI string `json:"uri"`
+			} `json:"artifactLocation"`
+			Region struct {
+				StartLine   int `json:"startLine"`
+				StartColumn int `json:"startColumn"`
+			} `json:"region"`
+		} `json:"physicalLocation"`
+	}
+	type sarifResult struct {
+		RuleID    string          `json:"ruleId"`
+		Level     string          `json:"level"`
+		Message   sarifMessage    `json:"message"`
+		Locations []sarifLocation `json:"locations"`
+	}
+	type sarifRule struct {
+		ID               string       `json:"id"`
+		Name             string       `json:"name"`
+		ShortDescription sarifMessage `json:"shortDescription"`
+	}
+	type sarifDriver struct {
+		Name           string      `json:"name"`
+		Version        string      `json:"version"`
+		InformationURI string      `json:"informationUri"`
+		Rules          []sarifRule `json:"rules"`
+	}
+	type sarifTool struct {
+		Driver sarifDriver `json:"driver"`
+	}
+	type sarifRun struct {
+		Tool    sarifTool     `json:"tool"`
+		Results []sarifResult `json:"results"`
+	}
+	type sarifRoot struct {
+		Schema  string     `json:"$schema"`
+		Version string     `json:"version"`
+		Runs    []sarifRun `json:"runs"`
+	}
+
+	severityToLevel := map[models.Severity]string{
+		models.SeverityCritical: "error",
+		models.SeverityHigh:     "error",
+		models.SeverityMedium:   "warning",
+		models.SeverityLow:      "note",
+		models.SeverityInfo:     "note",
+	}
+
+	var sarifRules []sarifRule
+	for _, r := range loaded {
+		sarifRules = append(sarifRules, sarifRule{
+			ID:               r.ID,
+			Name:             r.Name,
+			ShortDescription: sarifMessage{Text: r.Message},
+		})
+	}
+
+	var results []sarifResult
+	for _, f := range findings {
+		var loc sarifLocation
+		loc.PhysicalLocation.ArtifactLocation.URI = f.File
+		loc.PhysicalLocation.Region.StartLine = f.Line
+		loc.PhysicalLocation.Region.StartColumn = f.Column
+
+		level := severityToLevel[f.Severity]
+		if level == "" {
+			level = "warning"
+		}
+		results = append(results, sarifResult{
+			RuleID:    f.RuleID,
+			Level:     level,
+			Message:   sarifMessage{Text: f.Message},
+			Locations: []sarifLocation{loc},
+		})
+	}
+
+	run := sarifRun{Results: results}
+	run.Tool.Driver = sarifDriver{
+		Name:           "litd",
+		Version:        "0.1.0",
+		InformationURI: "https://github.com/voxire/lint-in-the-dead",
+		Rules:          sarifRules,
+	}
+
+	out := sarifRoot{
+		Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+		Version: "2.1.0",
+		Runs:    []sarifRun{run},
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.Encode(out) //nolint:errcheck
 }
 
 func printTextReport(findings []models.Finding, summary models.Summary, dir string) {
@@ -192,6 +361,40 @@ func printTextReport(findings []models.Finding, summary models.Summary, dir stri
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// changedFiles returns only files that differ from the last commit.
+func changedFiles(root string) ([]rules.FileContent, error) {
+	out, err := exec.Command("git", "-C", root, "diff", "--name-only", "HEAD").Output()
+	if err != nil {
+		// Fall back to all files if git isn't available.
+		return walkFiles(root)
+	}
+	// Also include staged files.
+	staged, _ := exec.Command("git", "-C", root, "diff", "--name-only", "--cached").Output()
+	pathSet := make(map[string]bool)
+	for _, line := range strings.Split(strings.TrimSpace(string(out))+"\n"+strings.TrimSpace(string(staged)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			pathSet[line] = true
+		}
+	}
+
+	var files []rules.FileContent
+	for rel := range pathSet {
+		abs := filepath.Join(root, rel)
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(rel))
+		files = append(files, rules.FileContent{
+			Path:     rel,
+			Language: detectLang(ext),
+			Content:  string(data),
+		})
+	}
+	return files, nil
+}
 
 func walkFiles(root string) ([]rules.FileContent, error) {
 	var files []rules.FileContent
